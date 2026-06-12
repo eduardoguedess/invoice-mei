@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gerador de Invoice MEI</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 680px; margin: 0 auto; }
+  .header { margin-bottom: 1.5rem; }
+  .header h1 { font-size: 22px; font-weight: 600; color: #1a1a1a; display: flex; align-items: center; gap: 10px; }
+  .header p { font-size: 14px; color: #666; margin-top: 4px; }
+  .card { background: #fff; border: 1px solid #e5e5e3; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .section-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media(max-width:520px){ .grid-2 { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 13px; color: #555; font-weight: 500; }
+  .field input, .field textarea, .field select {
+    font-family: inherit; font-size: 14px; color: #1a1a1a;
+    border: 1px solid #d5d5d3; border-radius: 8px; padding: 9px 12px;
+    outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    background: #fff;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    border-color: #1a1a1a; box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  }
+  .field textarea { resize: vertical; min-height: 72px; }
+  .field-full { grid-column: 1 / -1; }
+  .btn-primary {
+    background: #1a1a1a; color: #fff; border: none; border-radius: 8px;
+    padding: 11px 22px; font-size: 14px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary {
+    background: #fff; color: #1a1a1a; border: 1px solid #d5d5d3;
+    border-radius: 8px; padding: 11px 22px; font-size: 14px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px; transition: background 0.15s;
+  }
+  .btn-secondary:hover { background: #f5f5f3; }
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+  .loading { display: none; align-items: center; gap: 10px; color: #666; font-size: 14px; padding: 1rem 0; }
+  .spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-msg { display: none; color: #b91c1c; font-size: 13px; padding: 10px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-top: 10px; }
+  #invoice-preview { display: none; }
+  .invoice-wrap { background: #fff; border: 1px solid #e5e5e3; border-radius: 12px; padding: 2.5rem; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .invoice-actions { display: none !important; }
+    .invoice-wrap { border: none; border-radius: 0; padding: 1rem; }
+  }
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid #e5e5e3; gap: 1rem; }
+  .inv-company h2 { font-size: 20px; font-weight: 600; color: #1a1a1a; }
+  .inv-company p { font-size: 13px; color: #666; margin-top: 3px; }
+  .inv-meta { text-align: right; flex-shrink: 0; }
+  .inv-number { font-size: 13px; color: #888; }
+  .inv-date { font-size: 13px; color: #888; margin-top: 2px; }
+  .inv-badge { display: inline-block; background: #eaf3de; color: #3b6d11; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; margin-top: 8px; }
+  .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+  @media(max-width:480px){ .inv-parties { grid-template-columns: 1fr; } }
+  .inv-party-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .inv-party-name { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  .inv-party-detail { font-size: 13px; color: #666; margin-top: 2px; }
+  .inv-services-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .inv-service-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid #e5e5e3; gap: 1rem; }
+  .inv-service-desc { flex: 1; }
+  .inv-service-desc strong { font-size: 14px; color: #1a1a1a; font-weight: 600; }
+  .inv-service-desc span { display: block; font-size: 13px; color: #666; margin-top: 3px; line-height: 1.5; }
+  .inv-service-val { font-size: 14px; font-weight: 600; color: #1a1a1a; white-space: nowrap; }
+  .inv-total { display: flex; justify-content: flex-end; margin-top: 1.25rem; }
+  .inv-total-box { background: #f5f5f3; border-radius: 8px; padding: 14px 22px; text-align: right; min-width: 200px; }
+  .inv-total-label { font-size: 12px; color: #888; font-weight: 500; }
+  .inv-total-value { font-size: 24px; font-weight: 700; color: #1a1a1a; margin-top: 2px; }
+  .inv-section { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e5e3; }
+  .inv-section-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .inv-section-text { font-size: 13px; color: #555; line-height: 1.6; }
+  .inv-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e5e3; font-size: 12px; color: #aaa; text-align: center; }
+  .icon { display: inline-block; vertical-align: middle; width: 20px; height: 20px; }
+  h1 svg { width: 22px; height: 22px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>
+        <line x1="9" y1="9" x2="10" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
+      </svg>
+      Gerador de Invoice MEI
+    </h1>
+    <p>Preencha os dados abaixo e gere o documento em PDF</p>
+  </div>
+  <div id="form-section">
+    <div class="card">
+      <div class="section-title">Dados do prestador</div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Nome / Razao social</label>
+          <input type="text" id="prestador-nome" placeholder="Joao Silva ME" />
+        </div>
+        <div class="field">
+          <label>CNPJ</label>
+          <input type="text" id="prestador-cnpj" placeholder="00.000.000/0001-00" maxlength="18" />
+        </div>
+        <div class="field">
+          <label>Telefone / WhatsApp</label>
+          <input type="text" id="prestador-tel" placeholder="(88) 90000-0000" />
+        </div>
+        <div class="field">
+          <label>E-mail</label>
+          <input type="text" id="prestador-email" placeholder="joao@email.com" />
+        </div>
+        <div class="field field-full">
+          <label>Cidade / UF</label>
+          <input type="text" id="prestador-cidade" placeholder="Juazeiro do Norte - CE" />
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Tomador do servico</div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Nome / Razao social</label>
+          <input type="text" id="tomador-nome" placeholder="Empresa Contratante Ltda" />
+        </div>
+        <div class="field">
+          <label>CPF / CNPJ</label>
+          <input type="text" id="tomador-doc" placeholder="00.000.000/0001-00" />
+        </div>
+        <div class="field field-full">
+          <label>Endereco (opcional)</label>
+          <input type="text" id="tomador-end" placeholder="Rua Exemplo, 123 - Cidade - UF" />
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Servico prestado</div>
+      <div class="grid-2">
+        <div class="field field-full">
+          <label>Descreva o servico (pode ser breve, a IA completa)</label>
+          <textarea id="servico-desc" placeholder="Ex: instalacao eletrica no galpao industrial"></textarea>
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input type="text" id="servico-valor" placeholder="1.500,00" />
+        </div>
+        <div class="field">
+          <label>Data de vencimento</label>
+          <input type="date" id="servico-venc" />
+        </div>
+        <div class="field">
+          <label>Forma de pagamento</label>
+          <select id="servico-pgto">
+            <option value="Pix">Pix</option>
+            <option value="Transferencia bancaria">Transferencia bancaria</option>
+            <option value="Boleto">Boleto</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Cheque">Cheque</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Chave Pix / dados bancarios (opcional)</label>
+          <input type="text" id="servico-pix" placeholder="CPF, e-mail, telefone ou chave aleatoria" />
+        </div>
+      </div>
+    </div>
+    <div id="error-msg" class="error-msg"></div>
+    <div class="actions">
+      <button class="btn-primary" onclick="gerarInvoice()" id="btn-gerar">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
+          <path d="M17 4a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
+          <path d="M19 11h2m-1 -1v2"/>
+        </svg>
+        Gerar invoice com IA
+      </button>
+    </div>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <span>A IA esta gerando sua invoice...</span>
+    </div>
+  </div>
+  <div id="invoice-preview">
+    <div class="invoice-actions actions" style="margin-bottom:1rem;">
+      <button class="btn-secondary" onclick="voltarForm()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 11l-4 4l4 4m-4 -4h11a4 4 0 0 0 0 -8h-1"/>
+        </svg>
+        Editar
+      </button>
+      <button class="btn-primary" onclick="baixarPDF()" id="btn-pdf">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="4" x2="12" y2="16"/>
+        </svg>
+        Baixar PDF
+      </button>
+    </div>
+    <div class="invoice-wrap" id="invoice-box"></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+document.getElementById('prestador-cnpj').addEventListener('input', function(){
+  let v = this.value.replace(/\D/g,'');
+  if(v.length<=11) this.value = v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+  else this.value = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+});
+function hoje() {
+  return new Date().toLocaleDateString('pt-BR');
+}
+function numInvoice() {
+  const n = (parseInt(localStorage.getItem('inv_seq')||'0') + 1);
+  localStorage.setItem('inv_seq', n);
+  return String(n).padStart(4,'0');
+}
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display='none', 5000);
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+async function gerarInvoice() {
+  const prestNome = document.getElementById('prestador-nome').value.trim();
+  const prestCNPJ = document.getElementById('prestador-cnpj').value.trim();
+  const tomNome   = document.getElementById('tomador-nome').value.trim();
+  const servicoDesc = document.getElementById('servico-desc').value.trim();
+  const valor     = document.getElementById('servico-valor').value.trim();
+  if(!prestNome || !tomNome || !servicoDesc || !valor) {
+    showError('Preencha pelo menos: nome do prestador, tomador, descricao do servico e valor.');
+    return;
+  }
+  const btn = document.getElementById('btn-gerar');
+  btn.disabled = true;
+  document.getElementById('loading').style.display = 'flex';
+  const venc = document.getElementById('servico-venc').value;
+  const vencFormatado = venc ? new Date(venc+'T12:00:00').toLocaleDateString('pt-BR') : null;
+  const pgto   = document.getElementById('servico-pgto').value;
+  const pix    = document.getElementById('servico-pix').value.trim();
+  const email  = document.getElementById('prestador-email').value.trim();
+  const tel    = document.getElementById('prestador-tel').value.trim();
+  const cidade = document.getElementById('prestador-cidade').value.trim();
+  const tomDoc = document.getElementById('tomador-doc').value.trim();
+  const tomEnd = document.getElementById('tomador-end').value.trim();
+  const prompt = `Voce e assistente de um MEI prestador de servicos. Gere uma descricao profissional e clara do servico prestado, em portugues do Brasil, para constar em uma invoice/recibo.
+Dados:
+- Prestador: ${prestNome}${prestCNPJ ? ' (CNPJ: '+prestCNPJ+')' : ''}
+- Tomador: ${tomNome}
+- Servico descrito pelo prestador: "${servicoDesc}"
+- Valor: R$ ${valor}
+- Forma de pagamento: ${pgto}
+Retorne APENAS um JSON com este formato exato, sem markdown, sem explicacao:
+{
+  "descricao_curta": "titulo do servico em ate 6 palavras",
+  "descricao_completa": "descricao profissional completa do servico em 1-2 frases",
+  "observacoes": "observacoes adicionais relevantes para MEI, como isencao de impostos conforme LC 123/2006"
+}`;
+  let descricao_curta = servicoDesc;
+  let descricao_completa = servicoDesc;
+  let observacoes = 'Prestador optante pelo Simples Nacional - MEI. Documento nao substitui Nota Fiscal Eletronica.';
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if(resp.ok) {
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+      const clean = text.replace(/```json|```/g,'').trim();
+      const parsed = JSON.parse(clean);
+      descricao_curta    = parsed.descricao_curta    || descricao_curta;
+      descricao_completa = parsed.descricao_completa || descricao_completa;
+      observacoes        = parsed.observacoes        || observacoes;
+    }
+  } catch(e) {
+    // Usa fallback sem IA
+  }
+  document.getElementById('loading').style.display = 'none';
+  btn.disabled = false;
+  const num = numInvoice();
+  document.getElementById('invoice-box').innerHTML = `
+    <div class="inv-header">
+      <div class="inv-company">
+        <h2>${esc(prestNome)}</h2>
+        ${prestCNPJ ? '<p>CNPJ: '+esc(prestCNPJ)+'</p>' : ''}
+        ${cidade ? '<p>'+esc(cidade)+'</p>' : ''}
+        ${tel ? '<p>'+esc(tel)+'</p>' : ''}
+        ${email ? '<p>'+esc(email)+'</p>' : ''}
+        <span class="inv-badge">MEI - Simples Nacional</span>
+      </div>
+      <div class="inv-meta">
+        <div class="inv-number">Invoice n ${num}</div>
+        <div class="inv-date">Emissao: ${hoje()}</div>
+        ${vencFormatado ? '<div class="inv-date">Vencimento: '+vencFormatado+'</div>' : ''}
+      </div>
+    </div>
+    <div class="inv-parties">
+      <div>
+        <div class="inv-party-label">Prestador</div>
+        <div class="inv-party-name">${esc(prestNome)}</div>
+        ${prestCNPJ ? '<div class="inv-party-detail">CNPJ: '+esc(prestCNPJ)+'</div>' : ''}
+        ${cidade ? '<div class="inv-party-detail">'+esc(cidade)+'</div>' : ''}
+      </div>
+      <div>
+        <div class="inv-party-label">Tomador</div>
+        <div class="inv-party-name">${esc(tomNome)}</div>
+        ${tomDoc ? '<div class="inv-party-detail">CPF/CNPJ: '+esc(tomDoc)+'</div>' : ''}
+        ${tomEnd ? '<div class="inv-party-detail">'+esc(tomEnd)+'</div>' : ''}
+      </div>
+    </div>
+    <div>
+      <div class="inv-services-title">Servico prestado</div>
+      <div class="inv-service-row">
+        <div class="inv-service-desc">
+          <strong>${esc(descricao_curta)}</strong>
+          <span>${esc(descricao_completa)}</span>
+        </div>
+        <div class="inv-service-val">R$ ${esc(valor)}</div>
+      </div>
+    </div>
+    <div class="inv-total">
+      <div class="inv-total-box">
+        <div class="inv-total-label">Total a pagar</div>
+        <div class="inv-total-value">R$ ${esc(valor)}</div>
+      </div>
+    </div>
+    <div class="inv-section">
+      <div class="inv-section-label">Pagamento</div>
+      <div class="inv-section-text">
+        Forma: ${esc(pgto)}${pix ? ' - Chave Pix: '+esc(pix) : ''}
+      </div>
+    </div>
+    <div class="inv-section">
+      <div class="inv-section-label">Observacoes</div>
+      <div class="inv-section-text">${esc(observacoes)}</div>
+    </div>
+    <div class="inv-footer">
+      ${esc(prestNome)} - Gerado em ${hoje()}
+    </div>
+  `;
+  document.getElementById('form-section').style.display = 'none';
+  document.getElementById('invoice-preview').style.display = 'block';
+  window.scrollTo(0,0);
+}
+function voltarForm() {
+  document.getElementById('form-section').style.display = 'block';
+  document.getElementById('invoice-preview').style.display = 'none';
+}
+function baixarPDF() {
+  const btn = document.getElementById('btn-pdf');
+  btn.disabled = true;
+  btn.innerHTML = 'Gerando PDF...';
+  const el = document.getElementById('invoice-box');
+  const nome    = document.getElementById('prestador-nome').value.trim().replace(/\s+/g,'-') || 'invoice';
+  const tomador = document.getElementById('tomador-nome').value.trim().replace(/\s+/g,'-') || 'tomador';
+  html2pdf().set({
+    margin: [12, 15, 12, 15],
+    filename: 'invoice-'+nome+'-'+tomador+'.pdf',
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(el).save().then(() => {
+    btn.disabled = false;
+    btn.innerHTML = 'Baixar PDF';
+  });
+}
+</script>
+</body>
+</html>
